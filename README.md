@@ -24,31 +24,67 @@ Think of graphdo as a bridge between your AI assistant and your Microsoft 365 ac
 
 ## Installation
 
-Download graphdo for your operating system, then follow the steps below.
+Choose your operating system below. Each section provides an **automatic install script** (recommended) and **manual steps** if you prefer.
 
-👉 **Download the latest version here:** [github.com/co-native-ab/graphdo/releases/latest](https://github.com/co-native-ab/graphdo/releases/latest)
+👉 **All releases:** [github.com/co-native-ab/graphdo/releases/latest](https://github.com/co-native-ab/graphdo/releases/latest)
 
 ### Windows
 
-1. Download **`graphdo-windows-amd64.exe`** from the link above.
+**Automatic install (PowerShell):**
+
+```powershell
+$LatestTag = (Invoke-RestMethod -Uri "https://api.github.com/repos/co-native-ab/graphdo/releases/latest").tag_name
+$Version = $LatestTag -replace "^v", ""
+$Arch = (Get-CimInstance Win32_ComputerSystem).SystemType
+switch ($Arch) {
+    "x64-based PC" { $Arch = "amd64" }
+    "ARM64-based PC" { $Arch = "arm64" }
+    default { throw "Unsupported architecture: $Arch" }
+}
+$TempDir = New-TemporaryFile | % { Remove-Item $_; New-Item -ItemType Directory -Path $_ }
+Invoke-WebRequest "https://github.com/co-native-ab/graphdo/releases/download/v${Version}/graphdo-windows-${Arch}.exe" -OutFile "${TempDir}\graphdo.exe"
+Move-Item "${TempDir}\graphdo.exe" "${ENV:LOCALAPPDATA}\Microsoft\WindowsApps\"
+```
+
+Open a **new** terminal window and type `graphdo --help` to verify. If you see a list of commands, you're all set! 🎉
+
+<details>
+<summary>Manual steps</summary>
+
+1. Download **`graphdo-windows-amd64.exe`** (or `graphdo-windows-arm64.exe` for ARM) from the [releases page](https://github.com/co-native-ab/graphdo/releases/latest).
 2. Rename the file to **`graphdo.exe`**.
-3. Create a folder called `C:\Tools\` (if it doesn't already exist) and move `graphdo.exe` into it.
-4. Add `C:\Tools\` to your system PATH so you can run graphdo from anywhere:
-   - Click the **Start menu** and search for **"Environment Variables"**.
-   - Click **"Edit the system environment variables"**.
-   - Click the **"Environment Variables…"** button.
-   - Under **"User variables"**, find **Path** and click **Edit**.
-   - Click **New** and type `C:\Tools\`.
-   - Click **OK** on all the windows to save.
-5. Open a **new** terminal window (the old one won't see the change) and type:
+3. Move `graphdo.exe` into `%LOCALAPPDATA%\Microsoft\WindowsApps\` (this folder is already in your PATH).
+4. Open a **new** terminal window and type:
    ```
    graphdo --help
    ```
    If you see a list of commands, you're all set! 🎉
 
+</details>
+
 ### macOS
 
-1. Download the right file for your Mac:
+**Automatic install:**
+
+```shell
+LATEST_TAG=$(curl -s https://api.github.com/repos/co-native-ab/graphdo/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+VERSION=${LATEST_TAG#"v"}
+ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+TEMP_DIR=$(mktemp -d)
+curl -L "https://github.com/co-native-ab/graphdo/releases/download/v${VERSION}/graphdo-darwin-${ARCH}" -o "${TEMP_DIR}/graphdo"
+chmod +x "${TEMP_DIR}/graphdo"
+sudo mv "${TEMP_DIR}/graphdo" /usr/local/bin/graphdo
+```
+
+Type `graphdo --help` to verify. If you see a list of commands, you're all set! 🎉
+
+> **If macOS blocks it** with a message like "cannot be opened because the developer cannot be verified":
+> Open **System Settings** → **Privacy & Security**, scroll down and look for a message about graphdo being blocked, then click **"Allow Anyway"** and try again.
+
+<details>
+<summary>Manual steps</summary>
+
+1. Download the right file for your Mac from the [releases page](https://github.com/co-native-ab/graphdo/releases/latest):
    - **Intel Mac** → `graphdo-darwin-amd64`
    - **Apple Silicon (M1, M2, M3, M4)** → `graphdo-darwin-arm64`
 
@@ -83,9 +119,28 @@ Download graphdo for your operating system, then follow the steps below.
    ```
    If you see a list of commands, you're all set! 🎉
 
+</details>
+
 ### Linux
 
-1. Download the right file for your system:
+**Automatic install:**
+
+```shell
+LATEST_TAG=$(curl -s https://api.github.com/repos/co-native-ab/graphdo/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+VERSION=${LATEST_TAG#"v"}
+ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/armv[0-9]*/&/' -e 's/aarch64/arm64/')
+TEMP_DIR=$(mktemp -d)
+curl -L "https://github.com/co-native-ab/graphdo/releases/download/v${VERSION}/graphdo-linux-${ARCH}" -o "${TEMP_DIR}/graphdo"
+chmod +x "${TEMP_DIR}/graphdo"
+sudo mv "${TEMP_DIR}/graphdo" /usr/local/bin/graphdo
+```
+
+Type `graphdo --help` to verify. If you see a list of commands, you're all set! 🎉
+
+<details>
+<summary>Manual steps</summary>
+
+1. Download the right file for your system from the [releases page](https://github.com/co-native-ab/graphdo/releases/latest):
    - **Most desktops/laptops** → `graphdo-linux-amd64`
    - **ARM devices (Raspberry Pi, etc.)** → `graphdo-linux-arm64`
 2. Open a terminal and go to your Downloads folder:
@@ -105,6 +160,8 @@ Download graphdo for your operating system, then follow the steps below.
    graphdo --help
    ```
    If you see a list of commands, you're all set! 🎉
+
+</details>
 
 ---
 
@@ -168,7 +225,7 @@ When you first run `graphdo login`, Microsoft may tell you that you need admin a
 
 **What to tell your IT admin:**
 
-> "I'd like to use a tool called graphdo that helps me send emails to myself and manage my todo list from the command line. It needs admin consent for these permissions: User.Read, Mail.Send, and Tasks.ReadWrite. The application ID is `b073490b-a1a2-4bb8-9d83-00bb5c15fcfd` and it's published by Co-native AB."
+> "I'd like to use a tool called graphdo that helps me send emails to myself and manage my todo list from the command line. It needs admin consent for these permissions: User.Read, Mail.Send, Tasks.ReadWrite, and offline_access. The application ID is `b073490b-a1a2-4bb8-9d83-00bb5c15fcfd` and it's published by Co-native AB."
 
 ### For IT administrators
 
@@ -185,6 +242,7 @@ graphdo is a multi-tenant application published by Co-native AB. To grant consen
    | `User.Read` | Delegated | Read the signed-in user's basic profile |
    | `Mail.Send` | Delegated | Send mail as the signed-in user |
    | `Tasks.ReadWrite` | Delegated | Read and write the signed-in user's tasks |
+   | `offline_access` | Delegated | Maintain access to data you have given it access to (enables refresh tokens) |
 
 6. Once consent is granted, all users in your organization can use `graphdo login` without further approval.
 
@@ -230,7 +288,7 @@ If you're creating your own app registration, make sure it has:
 | **Platform** | Mobile and desktop applications |
 | **Redirect URI** | `http://localhost` |
 | **Allow public client flows** | Yes |
-| **API permissions (delegated)** | `User.Read`, `Mail.Send`, `Tasks.ReadWrite` |
+| **API permissions (delegated)** | `User.Read`, `Mail.Send`, `Tasks.ReadWrite`, `offline_access` |
 
 ---
 
@@ -243,6 +301,40 @@ Sign in to your Microsoft account. You only need to do this once (or again if yo
 ```
 graphdo login
 ```
+
+---
+
+### `graphdo logout`
+
+Clear your cached credentials. Use this if you want to sign in with a different account or if you're having authentication issues.
+
+```
+graphdo logout
+```
+
+---
+
+### `graphdo status`
+
+Check that everything is set up correctly. Returns a JSON summary showing whether you're logged in, your user, your configured todo list, and whether graphdo is ready to use.
+
+```
+graphdo status
+```
+
+Example output:
+
+```json
+{
+  "ready": true,
+  "logged_in": true,
+  "user": "you@example.com",
+  "todo_list": "My Tasks",
+  "todo_count": 5
+}
+```
+
+If something isn't configured, `ready` will be `false` and an `error` field will explain what's missing.
 
 ---
 
@@ -301,6 +393,33 @@ Show your todo items from the selected list. The output is in JSON format, which
 graphdo todo list
 ```
 
+For long lists, you can paginate:
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--top N` | How many items to show | 20 |
+| `--skip N` | How many items to skip (for the next page) | 0 |
+
+**Example — show 10 items at a time:**
+```
+graphdo todo list --top 10
+graphdo todo list --top 10 --skip 10
+```
+
+---
+
+### `graphdo todo show`
+
+Show the details of a single task.
+
+| Flag | Description | Required? |
+|------|-------------|-----------|
+| `--id "..."` | The ID of the task (from `todo list`) | Yes |
+
+```
+graphdo todo show --id "AAMkAD..."
+```
+
 ---
 
 ### `graphdo todo create`
@@ -322,6 +441,30 @@ graphdo todo create --title "Buy groceries"
 Create a task with a description:
 ```
 graphdo todo create --title "Prepare presentation" --body "Include Q3 metrics and team updates"
+```
+
+---
+
+### `graphdo todo update`
+
+Update a task's title or description (or both).
+
+| Flag | Description | Required? |
+|------|-------------|-----------|
+| `--id "..."` | The ID of the task to update (from `todo list`) | Yes |
+| `--title "..."` | New title for the task | No (but at least one of title/body required) |
+| `--body "..."` | New description for the task | No (but at least one of title/body required) |
+
+**Examples:**
+
+Change a task's title:
+```
+graphdo todo update --id "AAMkAD..." --title "Buy organic groceries"
+```
+
+Add notes to a task:
+```
+graphdo todo update --id "AAMkAD..." --body "Remember to check the sale section"
 ```
 
 ---
@@ -350,6 +493,49 @@ Remove a task entirely.
 
 ```
 graphdo todo delete --id "AAMkAD..."
+```
+
+---
+
+### `graphdo skill install`
+
+Install the graphdo agent skill file so AI agents (Claude Code, GitHub Copilot) know how to use graphdo. This is an **interactive** command — it will ask where to install the skill file.
+
+```
+graphdo skill install
+```
+
+You can also use flags for non-interactive installation:
+
+| Flag | Description |
+|------|-------------|
+| `--agent` | Agent type: `claude` or `copilot` |
+| `--scope` | Where to install: `project` or `user` |
+| `--output "..."` | Write the skill file to a specific file path |
+| `--stdout` | Print the skill file content to the terminal |
+
+**Installation targets:**
+
+| Option | Path |
+|--------|------|
+| Current project | `.agents/skills/graphdo/SKILL.md` |
+| Claude Code (user) | `~/.claude/skills/graphdo/SKILL.md` |
+| GitHub Copilot (user) | `~/.copilot/skills/graphdo/SKILL.md` |
+
+**Examples:**
+
+```bash
+# Interactive — choose where to install
+graphdo skill install
+
+# Install to the current project (works with both Claude and Copilot)
+graphdo skill install --agent claude --scope project
+
+# Install to your Claude Code user profile
+graphdo skill install --agent claude --scope user
+
+# Just print the skill file to the terminal
+graphdo skill install --stdout
 ```
 
 ---
