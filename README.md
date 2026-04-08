@@ -4,13 +4,15 @@
 
 graphdo is a small, friendly command-line tool that lets you **send emails to yourself** and **manage your to-do list** — all from your terminal.
 
-It's designed to work hand-in-hand with AI assistants like Claude. Here's a common workflow:
+It's designed to work hand-in-hand with AI assistants like [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Here's a common workflow:
 
-1. Your AI assistant summarizes your day — meetings, action items, things to follow up on.
-2. It uses graphdo to **send you a summary email** so everything lands in your inbox.
-3. It **creates follow-up tasks** in your Microsoft To Do list so nothing falls through the cracks.
+1. You ask Claude to **summarize your day** — meetings, emails, action items (using the Claude.ai Microsoft 365 Connector).
+2. Claude uses graphdo to **send you a summary email** so everything lands in your inbox.
+3. Claude **creates follow-up tasks** in your Microsoft To Do list so nothing falls through the cracks.
 
 Think of graphdo as a bridge between your AI assistant and your Microsoft 365 account. You stay organized without lifting a finger.
+
+**Getting started takes about 2 minutes:** [install graphdo](#installation), then run three commands — `login`, `config`, and `skill install`. That's it. See [Getting Started](#getting-started) for the full walkthrough.
 
 ---
 
@@ -167,7 +169,7 @@ Type `graphdo --help` to verify. If you see a list of commands, you're all set! 
 
 ## Getting Started
 
-Once graphdo is installed, follow these steps to get up and running for the first time.
+Once graphdo is installed, there are just **three steps** to get everything working. Each step only needs to be done once.
 
 ### Step 1: Sign in to your Microsoft account
 
@@ -175,11 +177,7 @@ Once graphdo is installed, follow these steps to get up and running for the firs
 graphdo login
 ```
 
-Your web browser will open automatically to Microsoft's sign-in page. Here's what to do:
-
-1. Sign in with your Microsoft account.
-2. Approve the permissions — graphdo needs access to send emails and manage your tasks.
-3. Once you see the success page in your browser, you can close it.
+Your web browser will open automatically to Microsoft's sign-in page. Sign in with your Microsoft account and approve the permissions. Once you see the success page in your browser, you can close it.
 
 You'll see a "✓ Logged in successfully" message in your terminal.
 
@@ -197,21 +195,57 @@ graphdo config
 
 This will show you all your Microsoft To Do lists and let you pick which one graphdo should use. Just follow the prompts.
 
-### Step 3: Send your first email
+### Step 3: Install the skill for your AI assistant
+
+This step teaches your AI assistant (like Claude Code) how to use graphdo. Without it, the assistant won't know graphdo exists.
 
 ```
-graphdo mail send --subject "Hello from graphdo" --body "It works!"
+graphdo skill install
 ```
 
-Check your inbox — you should see an email from yourself. ✉️
+This is an interactive command — it will ask you which AI assistant you use and where to install the skill file. If you're using **Claude Code**, choose **"Claude Code — user profile"**. This installs the skill for all your projects automatically.
 
-### Step 4: Check your todos
+> **Not sure what to pick?** If you're using Claude Code, choose "Claude Code — user profile". If you're using GitHub Copilot, choose "GitHub Copilot — user profile". If you want it available in just one project, choose "Current project".
+
+### ✅ You're all set!
+
+Run this to confirm everything is working:
 
 ```
-graphdo todo list
+graphdo status
 ```
 
-This shows your current tasks from the list you picked in Step 2.
+If you see `"ready": true`, you're good to go! 🎉
+
+---
+
+## Using graphdo with Claude Code
+
+This is the most common way to use graphdo — and the reason it was built.
+
+If you have the **Claude.ai Microsoft 365 Connector** active (the one that can read your emails and calendar), you can ask Claude to summarize your day and send the summary to your inbox. Here's how:
+
+1. Make sure you've completed the three setup steps above (login, config, skill install).
+2. Open Claude Code in your terminal.
+3. Ask Claude something like:
+
+> "Summarize the important emails and meetings I had in the last 24 hours. Then send the summary to me using graphdo, and create todo items for any follow-up actions."
+
+That's it. Claude will:
+- Use the Microsoft 365 Connector to read your recent emails and calendar events.
+- Write a summary of what happened.
+- Use `graphdo mail send` to email the summary to you.
+- Use `graphdo todo create` to add follow-up tasks to your todo list.
+
+You wake up the next morning with a clean summary in your inbox and actionable tasks in Microsoft To Do. ☕
+
+### More things you can ask Claude
+
+- *"Check my todos and mark anything related to the Q3 report as completed."*
+- *"Create a task to review the budget proposal by Friday."*
+- *"Send me an email with a list of all the meetings I have tomorrow."*
+
+As long as the skill is installed and graphdo is set up, Claude knows how to use it.
 
 ---
 
@@ -269,9 +303,8 @@ If your organization prefers to use its own Azure AD application instead of the 
 2. **Tell graphdo to use it:**
    ```
    graphdo login --client-id "your-app-client-id"
-   graphdo config --client-id "your-app-client-id"
    ```
-   The client ID is saved to your configuration file, so you only need to pass it once.
+   The client ID is saved to your configuration file, so you only need to pass it once. All future commands will use it automatically.
 
 3. **Or set it as an environment variable:**
    ```
@@ -546,18 +579,21 @@ These flags work with any command.
 
 | Flag | Environment Variable | Description |
 |------|---------------------|-------------|
-| `--client-id` | `GRAPHDO_CLIENT_ID` | Use a different Azure AD application. The client ID is saved to your config file so you only need to pass it once. Most users don't need this. |
 | `--graph-url` | `GRAPHDO_GRAPH_URL` | Use a different Microsoft Graph API endpoint (for sovereign cloud environments like GCC or China). |
 | `--device-code` | — | Use device code flow for login instead of opening a browser. Useful for remote servers or headless environments. |
 | `--config-dir` | `GRAPHDO_CONFIG_DIR` | Use a custom configuration directory instead of the OS default. |
 | `--access-token` | `GRAPHDO_ACCESS_TOKEN` | Provide a pre-obtained access token directly, skipping the login flow entirely. |
 | `--debug` | — | Enable verbose debug logging (written to stderr). |
 
+The `--client-id` flag is available on the `login` command only. See [Using Your Own App Registration](#using-your-own-app-registration) for details.
+
 ---
 
 ## For AI Assistants
 
-If you're using graphdo with an AI assistant like Claude, see [SKILL.md](SKILL.md) for integration guidance.
+graphdo includes a built-in skill file that teaches AI assistants how to use it. Run `graphdo skill install` to install it — see [Step 3](#step-3-install-the-skill-for-your-ai-assistant) in Getting Started.
+
+For the raw skill file, see [SKILL.md](SKILL.md).
 
 ---
 
