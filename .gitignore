@@ -1,0 +1,26 @@
+# Go binaries
+graphdo
+graphdo.exe
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Go test and coverage
+*.test
+*.out
+coverage.txt
+
+# Go build cache
+.cache/
+
+# Temporary files
+*.tmp
+*.log
