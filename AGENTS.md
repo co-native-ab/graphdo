@@ -32,7 +32,7 @@ SKILL.md                 Agent skill file (embedded in binary via go:embed)
 ## Key Design Decisions
 
 ### No Graph SDK
-We use `net/http` directly instead of the Microsoft Graph SDK. The SDK is bloated. Our `graph.Client` wraps `http.Client` with bearer token auth, JSON encode/decode, and structured error handling. All Graph API interaction goes through `client.do()`.
+We use `net/http` directly instead of the Microsoft Graph SDK. The SDK is bloated. Our `graph.Client` wraps `http.Client` with a `TokenSource` interface for lazy token acquisition, JSON encode/decode, and structured error handling. All Graph API interaction goes through `client.do()`, which calls `TokenSource.Token(ctx)` per-request. The client is created once in `main.go` and passed via `Dependencies.GraphClient`.
 
 ### MSAL Direct (Not azidentity)
 `azidentity.Cache` is an internal alias and can't be used externally. We use MSAL's `public.Client` directly with `cache.ExportReplace` for file-based token persistence. Two files in the config dir: `msal_cache.json` (token cache) and `account.json` (saved account for silent refresh).

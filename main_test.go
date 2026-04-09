@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/co-native-ab/graphdo/internal/cmd"
 	"github.com/co-native-ab/graphdo/internal/config"
@@ -108,7 +111,7 @@ func runWithIO(ctx context.Context, args []string, stdout, stderr *bytes.Buffer)
 
 	deps := &cmd.Dependencies{
 		Authenticator: authenticator,
-		GraphURL:      cliArgs.GraphURL,
+		GraphClient:   graph.NewClient(cliArgs.GraphURL, authenticator),
 		ConfigDir:     configDir,
 		SkillContent:  skillContent,
 		Stdout:        stdout,
@@ -745,5 +748,561 @@ func TestSkillInstallCopilotProject(t *testing.T) {
 	skillPath := filepath.Join(projectDir, ".agents", "skills", "graphdo", "SKILL.md")
 	if _, err := os.Stat(skillPath); err != nil {
 		t.Fatalf("skill file not found at expected path: %v", err)
+	}
+}
+
+// newTestDeps creates a Dependencies struct for use in MCP in-process tests.
+func (e *testEnv) newTestDeps(t *testing.T) *cmd.Dependencies {
+	t.Helper()
+	authenticator := newAuthenticator("test-token", cmd.DefaultClientID, e.configDir, false)
+	return &cmd.Dependencies{
+		Authenticator: authenticator,
+		GraphClient:   graph.NewClient(e.graphURL, authenticator),
+		ConfigDir:     e.configDir,
+		SkillContent:  skillContent,
+		Stdout:        e.stdout,
+		Stderr:        e.stderr,
+		Stdin:         strings.NewReader(""),
+	}
+}
+
+// connectMCPSession builds a graphdo MCP server and connects an in-process
+// client to it. The caller is responsible for closing the session.
+func (e *testEnv) connectMCPSession(ctx context.Context, t *testing.T) *mcp.ClientSession {
+	t.Helper()
+	deps := e.newTestDeps(t)
+	srv := cmd.BuildMCPServer(deps)
+
+	t1, t2 := mcp.NewInMemoryTransports()
+	if _, err := srv.Connect(ctx, t1, nil); err != nil {
+		t.Fatalf("connecting MCP server: %v", err)
+	}
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "test"}, nil)
+	session, err := client.Connect(ctx, t2, nil)
+	if err != nil {
+		t.Fatalf("connecting MCP client: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+// --- MCP install tests ---
+
+// readMCPConfig reads and unmarshals a JSON config file written by mcp install.
+func readMCPConfig(t *testing.T, path string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading MCP config %s: %v", path, err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("parsing MCP config %s: %v", path, err)
+	}
+	return cfg
+}
+
+// assertMCPServerEntry verifies that cfg[jsonKey]["graphdo"] is a valid server entry.
+func assertMCPServerEntry(t *testing.T, cfg map[string]any, jsonKey string) {
+	t.Helper()
+	servers, ok := cfg[jsonKey].(map[string]any)
+	if !ok {
+		t.Fatalf("config missing %q key (got %T)", jsonKey, cfg[jsonKey])
+	}
+	entry, ok := servers["graphdo"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing graphdo server entry under %q", jsonKey)
+	}
+	if entry["command"] == "" {
+		t.Error("server entry command should not be empty")
+	}
+	args, ok := entry["args"].([]any)
+	if !ok || len(args) != 2 || args[0] != "mcp" || args[1] != "run" {
+		t.Errorf("unexpected args: %v", entry["args"])
+	}
+}
+
+func TestMCPInstallClaudeCode(t *testing.T) {
+	env := newTestEnv(t)
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	if err := env.runCLI(t, "mcp", "install", "--target", "claude-code"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := readMCPConfig(t, filepath.Join(tempHome, ".claude.json"))
+	assertMCPServerEntry(t, cfg, "mcpServers")
+
+	if !strings.Contains(env.stderr.String(), "installed") {
+		t.Errorf("expected install message, got: %s", env.stderr.String())
+	}
+}
+
+func TestMCPInstallClaudeDesktop(t *testing.T) {
+	env := newTestEnv(t)
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	if err := env.runCLI(t, "mcp", "install", "--target", "claude-desktop"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// On Linux in tests, the path is ~/.config/claude/claude_desktop_config.json
+	configPath := filepath.Join(tempHome, ".config", "claude", "claude_desktop_config.json")
+	cfg := readMCPConfig(t, configPath)
+	assertMCPServerEntry(t, cfg, "mcpServers")
+}
+
+func TestMCPInstallVSCode(t *testing.T) {
+	env := newTestEnv(t)
+
+	workspaceDir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getting cwd: %v", err)
+	}
+	if err := os.Chdir(workspaceDir); err != nil {
+		t.Fatalf("changing cwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	if err := env.runCLI(t, "mcp", "install", "--target", "vscode"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := readMCPConfig(t, filepath.Join(workspaceDir, ".vscode", "mcp.json"))
+	assertMCPServerEntry(t, cfg, "servers")
+}
+
+func TestMCPInstallCopilot(t *testing.T) {
+	env := newTestEnv(t)
+	tempHome := t.TempDir()
+	t.Setenv("HOME", tempHome)
+
+	if err := env.runCLI(t, "mcp", "install", "--target", "copilot"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := readMCPConfig(t, filepath.Join(tempHome, ".copilot", "mcp.json"))
+	assertMCPServerEntry(t, cfg, "servers")
+}
+
+func TestMCPInstallMergesExisting(t *testing.T) {
+	env := newTestEnv(t)
+
+	workspaceDir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getting cwd: %v", err)
+	}
+	if err := os.Chdir(workspaceDir); err != nil {
+		t.Fatalf("changing cwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	// Pre-create a config with an existing server entry.
+	existing := `{
+  "servers": {
+    "other-tool": {
+      "command": "other",
+      "args": ["serve"]
+    }
+  }
+}
+`
+	vscodeDir := filepath.Join(workspaceDir, ".vscode")
+	if err := os.MkdirAll(vscodeDir, 0o755); err != nil {
+		t.Fatalf("creating .vscode dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vscodeDir, "mcp.json"), []byte(existing), 0o644); err != nil {
+		t.Fatalf("writing existing config: %v", err)
+	}
+
+	if err := env.runCLI(t, "mcp", "install", "--target", "vscode"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := readMCPConfig(t, filepath.Join(workspaceDir, ".vscode", "mcp.json"))
+
+	// Graphdo entry was added.
+	assertMCPServerEntry(t, cfg, "servers")
+
+	// Existing entry was preserved.
+	servers := cfg["servers"].(map[string]any)
+	if _, ok := servers["other-tool"]; !ok {
+		t.Error("existing server entry 'other-tool' was lost after merge")
+	}
+}
+
+func TestMCPInstallUnknownTarget(t *testing.T) {
+	env := newTestEnv(t)
+	err := env.runCLI(t, "mcp", "install", "--target", "unknown-agent")
+	if err == nil {
+		t.Fatal("expected error for unknown target")
+	}
+	if !strings.Contains(err.Error(), "unknown target") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// --- MCP tool tests ---
+
+func TestMCPToolTodoList(t *testing.T) {
+	env := newTestEnv(t)
+	env.seedConfig(t)
+
+	ctx := context.Background()
+	session := env.connectMCPSession(ctx, t)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "todo_list",
+		Arguments: map[string]any{"top": 20, "skip": 0},
+	})
+	if err != nil {
+		t.Fatalf("calling todo_list: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %v", result.Content)
+	}
+	if len(result.Content) == 0 {
+		t.Fatal("expected content in result")
+	}
+	text := result.Content[0].(*mcp.TextContent).Text
+	var items []graph.TodoItem
+	if err := json.Unmarshal([]byte(text), &items); err != nil {
+		t.Fatalf("parsing todo list: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 todo, got %d", len(items))
+	}
+	if items[0].Title != "Buy milk" {
+		t.Errorf("got title %q, want %q", items[0].Title, "Buy milk")
+	}
+}
+
+func TestMCPToolTodoCreate(t *testing.T) {
+	env := newTestEnv(t)
+	env.seedConfig(t)
+
+	ctx := context.Background()
+	session := env.connectMCPSession(ctx, t)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "todo_create",
+		Arguments: map[string]any{"title": "MCP task", "body": ""},
+	})
+	if err != nil {
+		t.Fatalf("calling todo_create: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %v", result.Content)
+	}
+
+	items := env.state.GetTodos("list-1")
+	if len(items) != 2 {
+		t.Fatalf("expected 2 todos after create, got %d", len(items))
+	}
+
+	found := false
+	for _, item := range items {
+		if item.Title == "MCP task" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("created todo 'MCP task' not found in mock state")
+	}
+}
+
+func TestMCPToolTodoComplete(t *testing.T) {
+	env := newTestEnv(t)
+	env.seedConfig(t)
+
+	ctx := context.Background()
+	session := env.connectMCPSession(ctx, t)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "todo_complete",
+		Arguments: map[string]any{"id": "task-1"},
+	})
+	if err != nil {
+		t.Fatalf("calling todo_complete: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %v", result.Content)
+	}
+
+	items := env.state.GetTodos("list-1")
+	if len(items) != 1 || items[0].Status != "completed" {
+		t.Errorf("expected task-1 to be completed, got status %q", items[0].Status)
+	}
+}
+
+func TestMCPToolTodoDelete(t *testing.T) {
+	env := newTestEnv(t)
+	env.seedConfig(t)
+
+	ctx := context.Background()
+	session := env.connectMCPSession(ctx, t)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "todo_delete",
+		Arguments: map[string]any{"id": "task-1"},
+	})
+	if err != nil {
+		t.Fatalf("calling todo_delete: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %v", result.Content)
+	}
+
+	items := env.state.GetTodos("list-1")
+	if len(items) != 0 {
+		t.Fatalf("expected 0 todos after delete, got %d", len(items))
+	}
+}
+
+func TestMCPToolMailSend(t *testing.T) {
+	env := newTestEnv(t)
+
+	ctx := context.Background()
+	session := env.connectMCPSession(ctx, t)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "mail_send",
+		Arguments: map[string]any{"subject": "MCP test", "body": "Hello from MCP", "html": false},
+	})
+	if err != nil {
+		t.Fatalf("calling mail_send: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %v", result.Content)
+	}
+
+	mails := env.state.GetSentMails()
+	if len(mails) != 1 {
+		t.Fatalf("expected 1 mail, got %d", len(mails))
+	}
+	if mails[0].Subject != "MCP test" {
+		t.Errorf("got subject %q, want %q", mails[0].Subject, "MCP test")
+	}
+	if mails[0].Body != "Hello from MCP" {
+		t.Errorf("got body %q, want %q", mails[0].Body, "Hello from MCP")
+	}
+}
+
+func TestMCPToolTodoUpdateError(t *testing.T) {
+	env := newTestEnv(t)
+	env.seedConfig(t)
+
+	ctx := context.Background()
+	session := env.connectMCPSession(ctx, t)
+
+	// Calling without title or body should return a tool error (not a protocol error).
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "todo_update",
+		Arguments: map[string]any{"id": "task-1"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected tool error for missing title and body")
+	}
+}
+
+func TestMCPToolNoConfig(t *testing.T) {
+	env := newTestEnv(t)
+	// Don't seed config — todo tools should return a tool error.
+
+	ctx := context.Background()
+	session := env.connectMCPSession(ctx, t)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "todo_list",
+		Arguments: map[string]any{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected protocol error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("expected tool error for missing config")
+	}
+}
+
+// runMCPViaCLI starts "mcp run" through the full CLI dispatch path using
+// io.Pipe for stdin/stdout. Returns an MCP client session connected to it.
+// The server shuts down when ctx is cancelled.
+func (e *testEnv) runMCPViaCLI(ctx context.Context, t *testing.T) *mcp.ClientSession {
+	t.Helper()
+
+	// Pipes: client writes → serverIn (server reads); server writes → clientIn (client reads)
+	serverInR, serverInW := io.Pipe()
+	clientInR, clientInW := io.Pipe()
+
+	// Build CLI args.
+	args := []string{
+		"--access-token", "test-token",
+		"--graph-url", e.graphURL,
+		"--config-dir", e.configDir,
+		"mcp", "run",
+	}
+	var cliArgs cmd.Args
+	p, err := parseArgs(&cliArgs, args, e.stderr)
+	if err != nil {
+		t.Fatalf("parsing args: %v", err)
+	}
+
+	configDir, err := config.Dir(cliArgs.ConfigDir)
+	if err != nil {
+		t.Fatalf("resolving config dir: %v", err)
+	}
+
+	authenticator := newAuthenticator(cliArgs.AccessToken, cmd.DefaultClientID, configDir, false)
+	deps := &cmd.Dependencies{
+		Authenticator: authenticator,
+		GraphClient:   graph.NewClient(cliArgs.GraphURL, authenticator),
+		ConfigDir:     configDir,
+		SkillContent:  skillContent,
+		Stdout:        clientInW, // server writes here → client reads from clientInR
+		Stderr:        e.stderr,
+		Stdin:         serverInR, // server reads here ← client writes to serverInW
+	}
+
+	// Run server in a goroutine — it blocks until ctx is cancelled.
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- cmd.Dispatch(ctx, p, &cliArgs, deps)
+		_ = clientInW.Close()
+	}()
+	t.Cleanup(func() {
+		_ = serverInW.Close()
+		<-serverErr
+	})
+
+	// Connect an MCP client to the pipe endpoints.
+	transport := &mcp.IOTransport{
+		Reader: clientInR, // client reads server output
+		Writer: serverInW, // client writes to server input
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "test"}, nil)
+	session, err := client.Connect(ctx, transport, nil)
+	if err != nil {
+		t.Fatalf("connecting MCP client via stdio: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+func TestMCPRunViaCLI(t *testing.T) {
+	env := newTestEnv(t)
+	env.seedConfig(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	session := env.runMCPViaCLI(ctx, t)
+
+	// Call todo_list through the full CLI → MCP stdio path.
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "todo_list",
+		Arguments: map[string]any{"top": 20, "skip": 0},
+	})
+	if err != nil {
+		t.Fatalf("calling todo_list via stdio: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %v", result.Content)
+	}
+
+	text := result.Content[0].(*mcp.TextContent).Text
+	var items []graph.TodoItem
+	if err := json.Unmarshal([]byte(text), &items); err != nil {
+		t.Fatalf("parsing todo list: %v", err)
+	}
+	if len(items) != 1 || items[0].Title != "Buy milk" {
+		t.Errorf("unexpected items: %v", items)
+	}
+
+	// Also test mail_send through the same session.
+	result, err = session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "mail_send",
+		Arguments: map[string]any{"subject": "Stdio test", "body": "via CLI", "html": false},
+	})
+	if err != nil {
+		t.Fatalf("calling mail_send via stdio: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %v", result.Content)
+	}
+
+	mails := env.state.GetSentMails()
+	if len(mails) != 1 || mails[0].Subject != "Stdio test" {
+		t.Errorf("unexpected mails: %v", mails)
+	}
+}
+
+func TestMCPToolTodoShow(t *testing.T) {
+	env := newTestEnv(t)
+	env.seedConfig(t)
+
+	ctx := context.Background()
+	session := env.connectMCPSession(ctx, t)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "todo_show",
+		Arguments: map[string]any{"id": "task-1"},
+	})
+	if err != nil {
+		t.Fatalf("calling todo_show: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool error: %v", result.Content)
+	}
+
+	text := result.Content[0].(*mcp.TextContent).Text
+	var item graph.TodoItem
+	if err := json.Unmarshal([]byte(text), &item); err != nil {
+		t.Fatalf("parsing todo: %v", err)
+	}
+	if item.ID != "task-1" || item.Title != "Buy milk" {
+		t.Errorf("unexpected item: %+v", item)
+	}
+}
+
+func TestMCPToolTodoUpdate(t *testing.T) {
+	env := newTestEnv(t)
+	env.seedConfig(t)
+
+	ctx := context.Background()
+	session := env.connectMCPSession(ctx, t)
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "todo_update",
+		Arguments: map[string]any{"id": "task-1", "title": "Buy oat milk"},
+	})
+	if err != nil {
+		t.Fatalf("calling todo_update: %v", err)
+	}
+	if result.IsError {
+		errText := result.Content[0].(*mcp.TextContent).Text
+		t.Fatalf("tool error: %s", errText)
+	}
+
+	text := result.Content[0].(*mcp.TextContent).Text
+	var item graph.TodoItem
+	if err := json.Unmarshal([]byte(text), &item); err != nil {
+		t.Fatalf("parsing updated todo: %v", err)
+	}
+	if item.Title != "Buy oat milk" {
+		t.Errorf("got title %q, want %q", item.Title, "Buy oat milk")
+	}
+
+	// Verify state was updated.
+	items := env.state.GetTodos("list-1")
+	if len(items) != 1 || items[0].Title != "Buy oat milk" {
+		t.Errorf("mock state not updated: %+v", items)
 	}
 }

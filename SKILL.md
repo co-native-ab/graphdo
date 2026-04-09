@@ -9,6 +9,55 @@ Send emails to yourself and manage Microsoft To Do tasks via Microsoft Graph.
 
 All machine-readable output is JSON on stdout. Human messages go to stderr. Parse stdout only.
 
+## MCP Server
+
+graphdo includes a built-in MCP (Model Context Protocol) server. Use this when graphdo is registered as an MCP server with your AI tool (Claude Code, Claude Desktop, VS Code, GitHub Copilot CLI). In isolated environments without shell access (e.g., Claude Cowork's VM), MCP is required.
+
+### Setup
+
+If the MCP server is not already configured, tell the user to run:
+
+```bash
+graphdo mcp install
+```
+
+This is an interactive command (requires human input). It will ask which AI tool to configure. Supported targets: Claude Code, Claude Desktop, VS Code, and GitHub Copilot CLI.
+
+For non-interactive use:
+
+```bash
+graphdo mcp install --target claude-code
+graphdo mcp install --target claude-desktop
+graphdo mcp install --target vscode
+graphdo mcp install --target copilot
+```
+
+Once installed, the MCP server starts automatically when the AI tool invokes it. The server provides these tools:
+
+| MCP Tool | Description |
+|----------|-------------|
+| `mail_send` | Send an email to yourself (params: `subject`, `body`, optional `html`) |
+| `todo_list` | List todos (optional params: `top`, `skip`) |
+| `todo_show` | Get a single todo (param: `id`) |
+| `todo_create` | Create a todo (params: `title`, optional `body`) |
+| `todo_update` | Update title/body (params: `id`, optional `title`, optional `body` — at least one required) |
+| `todo_complete` | Mark todo as completed (param: `id`) |
+| `todo_delete` | Delete a todo (param: `id`) |
+
+### MCP Prerequisite
+
+Before the MCP server can be used, graphdo must be authenticated and configured. Verify by running:
+
+```bash
+graphdo status
+```
+
+If `"ready": false`, tell the user to run `graphdo login` and `graphdo config` (both are interactive — do not run them from an agent).
+
+## CLI Commands
+
+Use these commands when you have direct shell access to the system where graphdo is installed (e.g., running locally with Claude Code, or any agent with terminal access).
+
 ## Before You Start
 
 Verify the CLI is configured by running:
@@ -121,6 +170,7 @@ Do not run these from an agent — they require human interaction and will hang.
 | `graphdo logout` | Clear cached credentials |
 | `graphdo config` | Pick which todo list to use (interactive picker) |
 | `graphdo skill install` | Install this skill file for an agent |
+| `graphdo mcp install` | Install the MCP server for an AI tool |
 
 ## Output Format
 

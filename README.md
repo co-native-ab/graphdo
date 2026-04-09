@@ -12,7 +12,7 @@ It's designed to work hand-in-hand with AI assistants like [Claude Code](https:/
 
 Think of graphdo as a bridge between your AI assistant and your Microsoft 365 account. You stay organized without lifting a finger.
 
-**Getting started takes about 2 minutes:** [install graphdo](#installation), then run three commands — `login`, `config`, and `skill install`. That's it. See [Getting Started](#getting-started) for the full walkthrough.
+**Getting started takes about 2 minutes:** [install graphdo](#installation), then run three commands — `login`, `config`, and `mcp install` (or `skill install`). That's it. See [Getting Started](#getting-started) for the full walkthrough.
 
 ---
 
@@ -195,17 +195,40 @@ graphdo config
 
 This will show you all your Microsoft To Do lists and let you pick which one graphdo should use. Just follow the prompts.
 
-### Step 3: Install the skill for your AI assistant
+### Step 3: Connect graphdo to your AI assistant
 
-This step teaches your AI assistant (like Claude Code) how to use graphdo. Without it, the assistant won't know graphdo exists.
+There are two ways to connect graphdo to your AI assistant. Choose the one that fits your setup:
+
+#### Option A: MCP server
+
+If your AI tool supports the [Model Context Protocol](https://modelcontextprotocol.io) (Claude Code, Claude Desktop, VS Code, GitHub Copilot CLI), install the MCP server:
+
+```
+graphdo mcp install
+```
+
+This is an interactive command — it will ask you which tool to configure. The MCP server lets your AI assistant call graphdo's tools directly, which is faster and more reliable than running CLI commands.
+
+For non-interactive use:
+
+```bash
+graphdo mcp install --target claude-code     # Claude Code
+graphdo mcp install --target claude-desktop  # Claude Desktop
+graphdo mcp install --target vscode          # VS Code (current workspace)
+graphdo mcp install --target copilot         # GitHub Copilot CLI
+```
+
+#### Option B: Skill file
+
+If your AI tool doesn't support MCP, or you prefer the agent to use CLI commands directly, install the skill file instead. This teaches the assistant how to use graphdo's CLI commands:
 
 ```
 graphdo skill install
 ```
 
-This is an interactive command — it will ask you which AI assistant you use and where to install the skill file. If you're using **Claude Code**, choose **"Claude Code — user profile"**. This installs the skill for all your projects automatically.
+This will ask you which AI assistant you use and where to install the skill file. If you're using **Claude Code**, choose **"Claude Code — user profile"**. This installs the skill for all your projects automatically.
 
-> **Not sure what to pick?** If you're using Claude Code, choose "Claude Code — user profile". If you're using GitHub Copilot, choose "GitHub Copilot — user profile". If you want it available in just one project, choose "Current project".
+> **Not sure what to pick?** Use the **MCP server** (Option A) if your AI tool runs in an isolated environment without shell access (e.g., Claude Cowork). Use the **skill file** (Option B) if your agent has direct shell access and you want it to use CLI commands. Both work well — choose what fits your setup.
 
 ### ✅ You're all set!
 
@@ -573,6 +596,72 @@ graphdo skill install --stdout
 
 ---
 
+### `graphdo mcp run`
+
+Start graphdo as a **stdio MCP server**, exposing all mail and todo operations as MCP tools. AI agents that support the [Model Context Protocol](https://modelcontextprotocol.io) can call graphdo's tools directly without using the CLI.
+
+```
+graphdo mcp run
+```
+
+The server reads from stdin and writes to stdout (stdio transport). Logging goes to stderr and does not interfere with the protocol.
+
+**Exposed MCP tools:**
+
+| Tool | Description |
+|------|-------------|
+| `mail_send` | Send an email to yourself |
+| `todo_list` | List todos from your configured list |
+| `todo_show` | Get a single todo by ID |
+| `todo_create` | Create a new todo |
+| `todo_update` | Update a todo's title and/or body |
+| `todo_complete` | Mark a todo as completed |
+| `todo_delete` | Delete a todo |
+
+> **Note:** graphdo must be [configured](#step-2-pick-your-todo-list) before todo tools will work. Run `graphdo config` first.
+
+---
+
+### `graphdo mcp install`
+
+Write the graphdo MCP server entry to an AI tool's config file so it can call `graphdo mcp run` automatically. This is an **interactive** command — it will ask which tool to configure.
+
+```
+graphdo mcp install
+```
+
+You can also use a flag for non-interactive installation:
+
+| Flag | Description |
+|------|-------------|
+| `--target` | Target tool: `claude-code`, `claude-desktop`, `vscode`, or `copilot` |
+
+**Installation targets:**
+
+| Target | Config file |
+|--------|-------------|
+| `claude-code` | `~/.claude.json` |
+| `claude-desktop` | macOS: `~/Library/Application Support/Claude/claude_desktop_config.json` · Linux: `~/.config/claude/claude_desktop_config.json` · Windows: `%APPDATA%\Claude\claude_desktop_config.json` |
+| `vscode` | `.vscode/mcp.json` (workspace-relative) |
+| `copilot` | `~/.copilot/mcp.json` |
+
+The install is **additive** — existing server entries in the config file are preserved. Only the `graphdo` entry is added or updated.
+
+**Examples:**
+
+```bash
+# Interactive — choose which tool to configure
+graphdo mcp install
+
+# Install for Claude Code
+graphdo mcp install --target claude-code
+
+# Install for VS Code (in the current workspace)
+graphdo mcp install --target vscode
+```
+
+---
+
 ## Global Flags
 
 These flags work with any command.
@@ -591,7 +680,11 @@ The `--client-id` flag is available on the `login` command only. See [Using Your
 
 ## For AI Assistants
 
-graphdo includes a built-in skill file that teaches AI assistants how to use it. Run `graphdo skill install` to install it — see [Step 3](#step-3-install-the-skill-for-your-ai-assistant) in Getting Started.
+graphdo provides two ways for AI assistants to interact with it:
+
+1. **MCP server** — Run `graphdo mcp install` to register graphdo as an MCP server. Your AI tool calls graphdo's tools directly via the [Model Context Protocol](https://modelcontextprotocol.io), which avoids shell escaping issues. Required for isolated environments without shell access (e.g., Claude Cowork). See [Step 3](#step-3-connect-graphdo-to-your-ai-assistant) in Getting Started.
+
+2. **Skill file** — Run `graphdo skill install` to install a skill file that teaches the AI assistant how to use graphdo's CLI commands. Works great when the agent has direct shell access (e.g., running locally with Claude Code).
 
 For the raw skill file, see [SKILL.md](SKILL.md).
 

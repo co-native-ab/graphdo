@@ -17,6 +17,7 @@ type Args struct {
 	Mail   *MailCmd   `arg:"subcommand:mail"   help:"send an email to yourself"`
 	Todo   *TodoCmd   `arg:"subcommand:todo"   help:"manage your todo items"`
 	Skill  *SkillCmd  `arg:"subcommand:skill"  help:"manage the graphdo agent skill file"`
+	Mcp    *McpCmd    `arg:"subcommand:mcp"    help:"run or install the MCP server"`
 
 	GraphURL    string `arg:"--graph-url,env:GRAPHDO_GRAPH_URL" help:"Microsoft Graph API base URL" default:"https://graph.microsoft.com/v1.0"`
 	AccessToken string `arg:"--access-token,env:GRAPHDO_ACCESS_TOKEN" help:"access token (skips login)"`
@@ -33,92 +34,4 @@ func (Args) Description() string {
 // Version returns the version string for --version output.
 func (Args) Version() string {
 	return "graphdo " + Version
-}
-
-// LoginCmd is the argument type for the login subcommand.
-type LoginCmd struct {
-	ClientID string `arg:"--client-id,env:GRAPHDO_CLIENT_ID" help:"Azure AD app client ID (saved to config)"`
-}
-
-// ConfigCmd is the argument type for the config subcommand.
-type ConfigCmd struct {
-	Show *ConfigShowCmd `arg:"subcommand:show" help:"show current configuration"`
-}
-
-// ConfigShowCmd is the argument type for the config show subcommand.
-type ConfigShowCmd struct{}
-
-// MailCmd is the argument type for the mail subcommand.
-type MailCmd struct {
-	Send *MailSendCmd `arg:"subcommand:send" help:"send an email to yourself"`
-}
-
-// MailSendCmd is the argument type for the mail send subcommand.
-type MailSendCmd struct {
-	Subject string `arg:"--subject,required" help:"email subject"`
-	Body    string `arg:"--body,required" help:"email body (use - for stdin)"`
-	HTML    bool   `arg:"--html" help:"send body as HTML"`
-}
-
-// TodoCmd is the argument type for the todo subcommand.
-type TodoCmd struct {
-	List     *TodoListCmd     `arg:"subcommand:list" help:"list todos"`
-	Show     *TodoShowCmd     `arg:"subcommand:show" help:"show a single todo"`
-	Create   *TodoCreateCmd   `arg:"subcommand:create" help:"create a todo"`
-	Update   *TodoUpdateCmd   `arg:"subcommand:update" help:"update a todo"`
-	Complete *TodoCompleteCmd `arg:"subcommand:complete" help:"mark a todo as completed"`
-	Delete   *TodoDeleteCmd   `arg:"subcommand:delete" help:"delete a todo"`
-}
-
-// TodoListCmd is the argument type for the todo list subcommand.
-type TodoListCmd struct {
-	Top  int `arg:"--top" help:"maximum number of items to return" default:"20"`
-	Skip int `arg:"--skip" help:"number of items to skip (for pagination)" default:"0"`
-}
-
-// TodoShowCmd is the argument type for the todo show subcommand.
-type TodoShowCmd struct {
-	ID string `arg:"--id,required" help:"task ID"`
-}
-
-// TodoUpdateCmd is the argument type for the todo update subcommand.
-type TodoUpdateCmd struct {
-	ID    string `arg:"--id,required" help:"task ID"`
-	Title string `arg:"--title" help:"new task title"`
-	Body  string `arg:"--body" help:"new task body"`
-}
-
-// TodoCreateCmd is the argument type for the todo create subcommand.
-type TodoCreateCmd struct {
-	Title string `arg:"--title,required" help:"task title"`
-	Body  string `arg:"--body" help:"task body"`
-}
-
-// TodoCompleteCmd is the argument type for the todo complete subcommand.
-type TodoCompleteCmd struct {
-	ID string `arg:"--id,required" help:"task ID"`
-}
-
-// TodoDeleteCmd is the argument type for the todo delete subcommand.
-type TodoDeleteCmd struct {
-	ID string `arg:"--id,required" help:"task ID"`
-}
-
-// LogoutCmd is the argument type for the logout subcommand.
-type LogoutCmd struct{}
-
-// StatusCmd is the argument type for the status subcommand.
-type StatusCmd struct{}
-
-// SkillCmd is the argument type for the skill subcommand.
-type SkillCmd struct {
-	Install *SkillInstallCmd `arg:"subcommand:install" help:"install the graphdo agent skill file"`
-}
-
-// SkillInstallCmd is the argument type for the skill install subcommand.
-type SkillInstallCmd struct {
-	Agent  string `arg:"--agent" help:"agent type: claude or copilot"`
-	Scope  string `arg:"--scope" help:"installation scope: project or user"`
-	Output string `arg:"--output" help:"write skill file to this path"`
-	Stdout bool   `arg:"--stdout" help:"print skill file to stdout"`
 }

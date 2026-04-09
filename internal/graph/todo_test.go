@@ -18,7 +18,7 @@ func TestListTodoLists(t *testing.T) {
 	srv := testutil.NewMockGraphServer(state)
 	t.Cleanup(srv.Close)
 
-	client := graph.NewClient(srv.URL, "fake-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("fake-token"))
 	lists, err := client.ListTodoLists(context.Background())
 	if err != nil {
 		t.Fatalf("ListTodoLists() error: %v", err)
@@ -45,7 +45,7 @@ func TestListTodos(t *testing.T) {
 	srv := testutil.NewMockGraphServer(state)
 	t.Cleanup(srv.Close)
 
-	client := graph.NewClient(srv.URL, "fake-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("fake-token"))
 	items, err := client.ListTodos(context.Background(), "list-1", 0, 0)
 	if err != nil {
 		t.Fatalf("ListTodos() error: %v", err)
@@ -69,7 +69,7 @@ func TestCreateTodo(t *testing.T) {
 	srv := testutil.NewMockGraphServer(state)
 	t.Cleanup(srv.Close)
 
-	client := graph.NewClient(srv.URL, "fake-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("fake-token"))
 	item, err := client.CreateTodo(context.Background(), "list-1", "New task", "")
 	if err != nil {
 		t.Fatalf("CreateTodo() error: %v", err)
@@ -101,7 +101,7 @@ func TestCreateTodoWithBody(t *testing.T) {
 	srv := testutil.NewMockGraphServer(state)
 	t.Cleanup(srv.Close)
 
-	client := graph.NewClient(srv.URL, "fake-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("fake-token"))
 	item, err := client.CreateTodo(context.Background(), "list-1", "Task with body", "Some details")
 	if err != nil {
 		t.Fatalf("CreateTodo() error: %v", err)
@@ -135,7 +135,7 @@ func TestCompleteTodo(t *testing.T) {
 	srv := testutil.NewMockGraphServer(state)
 	t.Cleanup(srv.Close)
 
-	client := graph.NewClient(srv.URL, "fake-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("fake-token"))
 	err := client.CompleteTodo(context.Background(), "list-1", "task-1")
 	if err != nil {
 		t.Fatalf("CompleteTodo() error: %v", err)
@@ -161,7 +161,7 @@ func TestListTodosPagination(t *testing.T) {
 	}
 	srv := testutil.NewMockGraphServer(state)
 	defer srv.Close()
-	client := graph.NewClient(srv.URL, "test-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("test-token"))
 	ctx := context.Background()
 
 	// Page 1: top=2, skip=0
@@ -214,7 +214,7 @@ func TestGetTodo(t *testing.T) {
 	}
 	srv := testutil.NewMockGraphServer(state)
 	defer srv.Close()
-	client := graph.NewClient(srv.URL, "test-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("test-token"))
 
 	item, err := client.GetTodo(context.Background(), "list-1", "task-1")
 	if err != nil {
@@ -233,7 +233,7 @@ func TestGetTodoNotFound(t *testing.T) {
 	state.Todos["list-1"] = []graph.TodoItem{}
 	srv := testutil.NewMockGraphServer(state)
 	defer srv.Close()
-	client := graph.NewClient(srv.URL, "test-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("test-token"))
 
 	_, err := client.GetTodo(context.Background(), "list-1", "nonexistent")
 	if err == nil {
@@ -248,7 +248,7 @@ func TestUpdateTodo(t *testing.T) {
 	}
 	srv := testutil.NewMockGraphServer(state)
 	defer srv.Close()
-	client := graph.NewClient(srv.URL, "test-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("test-token"))
 
 	item, err := client.UpdateTodo(context.Background(), "list-1", "task-1", "Buy oat milk", "from the store")
 	if err != nil {
@@ -278,7 +278,7 @@ func TestDeleteTodo(t *testing.T) {
 	srv := testutil.NewMockGraphServer(state)
 	t.Cleanup(srv.Close)
 
-	client := graph.NewClient(srv.URL, "fake-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("fake-token"))
 	err := client.DeleteTodo(context.Background(), "list-1", "task-1")
 	if err != nil {
 		t.Fatalf("DeleteTodo() error: %v", err)
