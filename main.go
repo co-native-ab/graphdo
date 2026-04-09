@@ -14,6 +14,7 @@ import (
 	"github.com/co-native-ab/graphdo/internal/auth"
 	"github.com/co-native-ab/graphdo/internal/cmd"
 	"github.com/co-native-ab/graphdo/internal/config"
+	"github.com/co-native-ab/graphdo/internal/graph"
 
 	"github.com/alexflint/go-arg"
 )
@@ -69,7 +70,7 @@ func run(ctx context.Context, args []string) error {
 
 	deps := &cmd.Dependencies{
 		Authenticator: authenticator,
-		GraphURL:      cliArgs.GraphURL,
+		GraphClient:   graph.NewClient(cliArgs.GraphURL, authenticator),
 		ConfigDir:     configDir,
 		SkillContent:  skillContent,
 		Stdout:        os.Stdout,

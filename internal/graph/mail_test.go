@@ -20,7 +20,7 @@ func TestGetMe(t *testing.T) {
 	srv := testutil.NewMockGraphServer(state)
 	t.Cleanup(srv.Close)
 
-	client := graph.NewClient(srv.URL, "fake-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("fake-token"))
 	user, err := client.GetMe(context.Background())
 	if err != nil {
 		t.Fatalf("GetMe() error: %v", err)
@@ -45,7 +45,7 @@ func TestSendMail(t *testing.T) {
 	srv := testutil.NewMockGraphServer(state)
 	t.Cleanup(srv.Close)
 
-	client := graph.NewClient(srv.URL, "fake-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("fake-token"))
 	err := client.SendMail(context.Background(), "bob@example.com", "Hello", "Hi Bob", false)
 	if err != nil {
 		t.Fatalf("SendMail() error: %v", err)
@@ -74,7 +74,7 @@ func TestSendMailHTML(t *testing.T) {
 	srv := testutil.NewMockGraphServer(state)
 	t.Cleanup(srv.Close)
 
-	client := graph.NewClient(srv.URL, "fake-token")
+	client := graph.NewClient(srv.URL, graph.StaticToken("fake-token"))
 	err := client.SendMail(context.Background(), "alice@example.com", "News", "<h1>Hello</h1>", true)
 	if err != nil {
 		t.Fatalf("SendMail() error: %v", err)
